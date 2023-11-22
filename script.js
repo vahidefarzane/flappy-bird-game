@@ -13,17 +13,33 @@ const state = {
   over: 2,
 };
 
+class GameAudio {
+  constructor(audioSrc) {
+    this.audio = new Audio(audioSrc);
+  }
+}
+
+const START = new GameAudio("audio/start.wav");
+const FLAP = new GameAudio("audio/flap.wav");
+const SCORE = new GameAudio("audio/score.wav");
+const HIT = new GameAudio("audio/hit.wav");
+const DIE = new GameAudio("audio/die.wav");
+
 function clickHandler() {
   switch (state.current) {
     case state.getReady:
+      START.audio.play();
       state.current = state.game;
       break;
     case state.game:
+      FLAP.audio.play();
       bird.flap();
       break;
     default:
       bird.speed = 0;
       bird.rotation = 0;
+      pipes.position = [];
+      score.value = 0;
       state.current = state.getReady;
       break;
   }
@@ -142,7 +158,15 @@ class GameOver {
     this.h = h;
     this.x = x;
     this.y = y;
+    this.medals = [
+      { x: 312, y: 113 },
+      { x: 361, y: 113 },
+      { x: 312, y: 159 },
+      { x: 361, y: 159 },
+    ];
+    this.medalIndex;
   }
+
   draw() {
     if (state.current == state.over) {
       ctx.drawImage(
@@ -156,9 +180,37 @@ class GameOver {
         this.w,
         this.h
       );
+      if (score.value === 0) {
+        this.medalIndex = 0;
+      } else if (score.value <= 5 && score.value >= 1) {
+        this.medalIndex = 1;
+      } else if (score.value > 5 && score.value <= 10) {
+        this.medalIndex = 2;
+      } else {
+        this.medalIndex = 3;
+      }
+      ctx.drawImage(
+        image,
+        this.medals[this.medalIndex].x,
+        this.medals[this.medalIndex].y,
+        45,
+        45,
+        74,
+        178,
+        45,
+        45
+      );
     }
   }
 }
+const gameOver = new GameOver(
+  175,
+  228,
+  225,
+  202,
+  canvas.width / 2 - 225 / 2,
+  90
+);
 class Bird {
   constructor(sX, sY, w, h, x, y) {
     this.w = w;
@@ -178,6 +230,7 @@ class Bird {
     this.gravity = 0.25;
     this.jump = 4.6;
     this.rotation = 0;
+    this.radius = 12;
   }
 
   draw() {
@@ -218,6 +271,7 @@ class Bird {
       this.y = canvas.height - foreground.h - this.h / 2;
       this.animationIndex = 1;
       if (state.current == state.game) {
+        DIE.audio.play();
         state.current = state.over;
       }
     }
@@ -243,25 +297,111 @@ class Pipes {
     this.position = [];
     this.maxYPos = -150;
   }
-  draw() {}
+  draw() {
+    for (let i = 0; i < this.position.length; i++) {
+      let p = this.position[i];
+      let topYPos = p.y;
+      let bottomYPos = p.y + this.h + this.gap;
+      ctx.drawImage(
+        image,
+        this.top.sX,
+        this.top.sY,
+        this.w,
+        this.h,
+        p.x,
+        topYPos,
+        this.w,
+        this.h
+      );
+      ctx.drawImage(
+        image,
+        this.bottom.sX,
+        this.bottom.sY,
+        this.w,
+        this.h,
+        p.x,
+        bottomYPos,
+        this.w,
+        this.h
+      );
+    }
+  }
   update() {
     if (state.current != state.game) return;
-    
+    if (frames % 100 == 0) {
+      this.position.push({
+        x: canvas.width,
+        y: this.maxYPos * (Math.random() + 1),
+      });
+    }
+    for (let i = 0; i < this.position.length; i++) {
+      let p = this.position[i];
+      p.x -= this.dx;
+
+      let bottomPipesPos = p.y + this.h + this.gap;
+
+      if (
+        bird.x + bird.radius > p.x &&
+        bird.x - bird.radius < p.x + this.w &&
+        bird.y + bird.radius > p.y &&
+        bird.y - bird.radius < p.y + this.h
+      ) {
+        HIT.audio.play();
+        state.current = state.over;
+      }
+
+      if (
+        bird.x + bird.radius > p.x &&
+        bird.x - bird.radius < p.x + this.w &&
+        bird.y + bird.radius > bottomPipesPos &&
+        bird.y - bird.radius < bottomPipesPos + this.h
+      ) {
+        HIT.audio.play();
+        state.current = state.over;
+      }
+
+      if (p.x + this.w <= 0) {
+        this.position.shift();
+        score.value += 1;
+        SCORE.audio.play();
+        score.best = Math.max(score.value, score.best);
+        localStorage.setItem("best", score.best);
+      }
+    }
   }
 }
-const pipes = new Pipes(553, 0, 502, 0, 53, 400, 2, 80);
+
+let score = {
+  best: parseInt(localStorage.getItem("best")) || 0,
+  value: 0,
+  draw: function () {
+    ctx.fillStyle = "#FFF";
+    ctx.strokeStyle = "#000";
+
+    if (state.current == state.game) {
+      ctx.lineWidth = 2;
+      ctx.font = "35px IMPACT";
+
+      ctx.fillText(this.value, canvas.width / 2, 50);
+      ctx.strokeText(this.value, canvas.width / 2, 50);
+    } else if (state.current == state.over) {
+      ctx.font = "25px IMPACT";
+
+      ctx.fillText(this.value, 225, 186);
+      ctx.strokeText(this.value, 225, 186);
+
+      ctx.fillText(this.best, 225, 228);
+      ctx.strokeText(this.best, 225, 228);
+    }
+  },
+};
+
+const pipes = new Pipes(553, 0, 502, 0, 53, 400, 2, 130);
 
 const background = new Background(0, 0, 275, 226, 0, canvas.height - 226);
 const foreground = new Forground(276, 0, 224, 112, 0, canvas.height - 112);
 const getReady = new GetReady(0, 228, 173, 152, canvas.width / 2 - 173 / 2, 80);
-const gameOver = new GameOver(
-  175,
-  228,
-  225,
-  202,
-  canvas.width / 2 - 225 / 2,
-  90
-);
+
 const bird = new Bird(this.sX, this.sY, 34, 26, 50, 150);
 
 function draw() {
@@ -273,6 +413,7 @@ function draw() {
   bird.draw();
   getReady.draw();
   gameOver.draw();
+  score.draw();
 }
 function update() {
   bird.update();
