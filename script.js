@@ -3,8 +3,20 @@ const ctx = canvas.getContext("2d");
 
 const degree = Math.PI / 180;
 let frames = 0;
+
 const image = new Image();
 image.src = "img/all.png";
+
+class GameAudio {
+  constructor(audioSrc) {
+    this.audio = new Audio(audioSrc);
+  }
+}
+const START = new GameAudio("audio/start.wav");
+const FLAP = new GameAudio("audio/flap.wav");
+const SCORE = new GameAudio("audio/score.wav");
+const HIT = new GameAudio("audio/hit.wav");
+const DIE = new GameAudio("audio/die.wav");
 
 const state = {
   current: 0,
@@ -12,18 +24,6 @@ const state = {
   game: 1,
   over: 2,
 };
-
-class GameAudio {
-  constructor(audioSrc) {
-    this.audio = new Audio(audioSrc);
-  }
-}
-
-const START = new GameAudio("audio/start.wav");
-const FLAP = new GameAudio("audio/flap.wav");
-const SCORE = new GameAudio("audio/score.wav");
-const HIT = new GameAudio("audio/hit.wav");
-const DIE = new GameAudio("audio/die.wav");
 
 function clickHandler() {
   switch (state.current) {
@@ -51,7 +51,8 @@ document.addEventListener("keydown", (e) => {
     clickHandler();
   }
 });
-class Background {
+
+class GameObject {
   constructor(sX, sY, w, h, x, y) {
     this.sX = sX;
     this.sY = sY;
@@ -60,6 +61,22 @@ class Background {
     this.x = x;
     this.y = y;
   }
+  draw() {
+    ctx.drawImage(
+      image,
+      this.sX,
+      this.sY,
+      this.w,
+      this.h,
+      this.x,
+      this.y,
+      this.w,
+      this.h
+    );
+  }
+}
+
+class Background extends GameObject {
   draw() {
     ctx.drawImage(
       image,
@@ -85,15 +102,11 @@ class Background {
     );
   }
 }
-class Forground {
+
+class Forground extends GameObject {
   constructor(sX, sY, w, h, x, y) {
-    this.sX = sX;
-    this.sY = sY;
-    this.w = w;
-    this.h = h;
-    this.x = x;
+    super(sX, sY, w, h, x, y);
     this.dx = 2;
-    this.y = y;
   }
   draw() {
     ctx.drawImage(
@@ -125,48 +138,17 @@ class Forground {
     }
   }
 }
-class GetReady {
+class GameOver extends GameObject {
   constructor(sX, sY, w, h, x, y) {
-    this.sX = sX;
-    this.sY = sY;
-    this.w = w;
-    this.h = h;
-    this.x = x;
-    this.y = y;
-  }
-  draw() {
-    if (state.current == state.getReady) {
-      ctx.drawImage(
-        image,
-        this.sX,
-        this.sY,
-        this.w,
-        this.h,
-        this.x,
-        this.y,
-        this.w,
-        this.h
-      );
-    }
-  }
-}
-class GameOver {
-  constructor(sX, sY, w, h, x, y) {
-    this.sX = sX;
-    this.sY = sY;
-    this.w = w;
-    this.h = h;
-    this.x = x;
-    this.y = y;
+    super(sX, sY, w, h, x, y);
     this.medals = [
       { x: 312, y: 113 },
       { x: 361, y: 113 },
       { x: 312, y: 159 },
       { x: 361, y: 159 },
     ];
-    this.medalIndex;
+    this.medalIndex = 0;
   }
-
   draw() {
     if (state.current == state.over) {
       ctx.drawImage(
@@ -203,22 +185,30 @@ class GameOver {
     }
   }
 }
-const gameOver = new GameOver(
-  175,
-  228,
-  225,
-  202,
-  canvas.width / 2 - 225 / 2,
-  90
-);
+class GetReady extends GameObject {
+  draw() {
+    if (state.current == state.getReady) {
+      ctx.drawImage(
+        image,
+        this.sX,
+        this.sY,
+        this.w,
+        this.h,
+        this.x,
+        this.y,
+        this.w,
+        this.h
+      );
+    }
+  }
+}
 class Bird {
-  constructor(sX, sY, w, h, x, y) {
+  constructor(w, h, x, y) {
     this.w = w;
     this.h = h;
     this.x = x;
     this.y = y;
-    this.w = w;
-    this.h = h;
+
     this.animation = [
       { sX: 276, sY: 112 },
       { sX: 276, sY: 139 },
@@ -232,7 +222,6 @@ class Bird {
     this.rotation = 0;
     this.radius = 12;
   }
-
   draw() {
     let bird = this.animation[this.animationIndex];
     ctx.save();
@@ -278,6 +267,32 @@ class Bird {
   }
   flap() {
     this.speed = -this.jump;
+  }
+}
+class Score {
+  constructor() {
+    this.best = parseInt(localStorage.getItem("best")) || 0;
+    this.value = 0;
+  }
+  draw() {
+    ctx.fillStyle = "#FFF";
+    ctx.strokeStyle = "#000";
+
+    if (state.current == state.game) {
+      ctx.lineWidth = 2;
+      ctx.font = "35px IMPACT";
+
+      ctx.fillText(this.value, canvas.width / 2, 50);
+      ctx.strokeText(this.value, canvas.width / 2, 50);
+    } else if (state.current == state.over) {
+      ctx.font = "25px IMPACT";
+
+      ctx.fillText(this.value, 225, 186);
+      ctx.strokeText(this.value, 225, 186);
+
+      ctx.fillText(this.best, 225, 228);
+      ctx.strokeText(this.best, 225, 228);
+    }
   }
 }
 class Pipes {
@@ -371,47 +386,29 @@ class Pipes {
   }
 }
 
-let score = {
-  best: parseInt(localStorage.getItem("best")) || 0,
-  value: 0,
-  draw: function () {
-    ctx.fillStyle = "#FFF";
-    ctx.strokeStyle = "#000";
-
-    if (state.current == state.game) {
-      ctx.lineWidth = 2;
-      ctx.font = "35px IMPACT";
-
-      ctx.fillText(this.value, canvas.width / 2, 50);
-      ctx.strokeText(this.value, canvas.width / 2, 50);
-    } else if (state.current == state.over) {
-      ctx.font = "25px IMPACT";
-
-      ctx.fillText(this.value, 225, 186);
-      ctx.strokeText(this.value, 225, 186);
-
-      ctx.fillText(this.best, 225, 228);
-      ctx.strokeText(this.best, 225, 228);
-    }
-  },
-};
-
+let score = new Score();
+const bird = new Bird(34, 26, 50, 150);
 const pipes = new Pipes(553, 0, 502, 0, 53, 400, 2, 130);
-
-const background = new Background(0, 0, 275, 226, 0, canvas.height - 226);
+const gameOver = new GameOver(
+  175,
+  228,
+  225,
+  202,
+  canvas.width / 2 - 225 / 2,
+  90
+);
 const foreground = new Forground(276, 0, 224, 112, 0, canvas.height - 112);
+const background = new Background(0, 0, 275, 226, 0, canvas.clientHeight - 226);
 const getReady = new GetReady(0, 228, 173, 152, canvas.width / 2 - 173 / 2, 80);
-
-const bird = new Bird(this.sX, this.sY, 34, 26, 50, 150);
 
 function draw() {
   ctx.fillStyle = "#70c5ce";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   background.draw();
+  getReady.draw();
   pipes.draw();
   foreground.draw();
   bird.draw();
-  getReady.draw();
   gameOver.draw();
   score.draw();
 }
